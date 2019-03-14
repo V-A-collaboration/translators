@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-03-14 15:47:13"
+	"lastUpdated": "2019-03-14 17:14:41"
 }
 
 function attr(docOrElem,selector,attr,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.getAttribute(attr):null}function text(docOrElem,selector,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.textContent:null}
@@ -63,8 +63,8 @@ function scrape(doc, url) {
 		rows = doc.querySelectorAll('h3 center u');
 	}
 	else { // cgi_loi
-		//rows = doc.getElementsByTagName("b"); //debug
-		rows = frames[0].document.getElementsByTagName('b'); //production
+		rows = doc.getElementsByTagName("b"); //debug
+		//rows = frames[0].document.getElementsByTagName('b'); //production
 	}
 	item = getLawEnacted(rows);
 	item.jurisdiction = 'be';
@@ -80,6 +80,8 @@ function getLawEnacted(lineList){
 				Z.debug("Date Enacted: " + item.dateEnacted);
 				item.nameOfAct = ZU.trimInternal(m[2]);
 				item.nameOfAct = item.nameOfAct.replace(/[\[\]]/g, "");
+				item.nameOfAct = item.nameOfAct.replace(/\.$/, "");
+				item.nameOfAct = item.nameOfAct.replace(/(^[a-zA-Z]*\b)/, "$1 van " + item.dateEnacted.toLowerCase())
 				Z.debug("Title: " + item.nameOfAct);
 				break;
 			}
@@ -94,7 +96,7 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "statute",
-				"nameOfAct": "Wet betreffende de rechten van de patiënt.",
+				"nameOfAct": "Wet van 22 augustus 2002 betreffende de rechten van de patiënt",
 				"creators": [],
 				"dateEnacted": "22 AUGUSTUS 2002",
 				"jurisdiction": "be",
@@ -111,7 +113,7 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "statute",
-				"nameOfAct": "Koninklijk besluit nr 78 betreffende de uitoefening van de gezondheidszorgberoepen",
+				"nameOfAct": "Koninklijk van 10 november 1967 besluit nr 78 betreffende de uitoefening van de gezondheidszorgberoepen",
 				"creators": [],
 				"dateEnacted": "10 NOVEMBER 1967",
 				"jurisdiction": "be",
