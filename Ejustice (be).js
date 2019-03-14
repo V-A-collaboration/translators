@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-03-14 17:14:41"
+	"lastUpdated": "2019-03-14 17:16:28"
 }
 
 function attr(docOrElem,selector,attr,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.getAttribute(attr):null}function text(docOrElem,selector,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.textContent:null}
@@ -81,7 +81,7 @@ function getLawEnacted(lineList){
 				item.nameOfAct = ZU.trimInternal(m[2]);
 				item.nameOfAct = item.nameOfAct.replace(/[\[\]]/g, "");
 				item.nameOfAct = item.nameOfAct.replace(/\.$/, "");
-				item.nameOfAct = item.nameOfAct.replace(/(^[a-zA-Z]*\b)/, "$1 van " + item.dateEnacted.toLowerCase())
+				item.nameOfAct = item.nameOfAct.replace(/(^(Wet|Koninklijk besluit)*\b)/, "$1 van " + item.dateEnacted.toLowerCase())
 				Z.debug("Title: " + item.nameOfAct);
 				break;
 			}
@@ -113,7 +113,7 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "statute",
-				"nameOfAct": "Koninklijk van 10 november 1967 besluit nr 78 betreffende de uitoefening van de gezondheidszorgberoepen",
+				"nameOfAct": "Koninklijk besluit van 10 november 1967 nr 78 betreffende de uitoefening van de gezondheidszorgberoepen",
 				"creators": [],
 				"dateEnacted": "10 NOVEMBER 1967",
 				"jurisdiction": "be",
