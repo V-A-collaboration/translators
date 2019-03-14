@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-03-14 17:17:22"
+	"lastUpdated": "2019-03-14 17:19:14"
 }
 
 function attr(docOrElem,selector,attr,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.getAttribute(attr):null}function text(docOrElem,selector,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.textContent:null}
@@ -63,8 +63,7 @@ function scrape(doc, url) {
 		rows = doc.querySelectorAll('h3 center u');
 	}
 	else { // cgi_loi
-		//rows = doc.getElementsByTagName("b"); //debug
-		rows = frames[0].document.getElementsByTagName('b'); //production
+		rows = doc.querySelectorAll('b')
 	}
 	item = getLawEnacted(rows);
 	item.jurisdiction = 'be';
@@ -76,7 +75,7 @@ function getLawEnacted(lineList){
 	for (i=0; i < lineList.length; i++){
 			var m = lineList[i].textContent.match(/(\d{1,2}\s[A-Z]*?\s\d{4})\.\s-\s([^<]*)/);
 			if (m){
-				item.dateEnacted = m[1];
+				item.dateEnacted = m[1].toLowerCase();
 				Z.debug("Date Enacted: " + item.dateEnacted);
 				item.nameOfAct = ZU.trimInternal(m[2]);
 				item.nameOfAct = item.nameOfAct.replace(/[\[\]]/g, "");
@@ -98,7 +97,7 @@ var testCases = [
 				"itemType": "statute",
 				"nameOfAct": "Wet van 22 augustus 2002 betreffende de rechten van de patiënt",
 				"creators": [],
-				"dateEnacted": "22 AUGUSTUS 2002",
+				"dateEnacted": "22 augustus 2002",
 				"jurisdiction": "be",
 				"attachments": [],
 				"tags": [],
@@ -115,7 +114,7 @@ var testCases = [
 				"itemType": "statute",
 				"nameOfAct": "Koninklijk besluit van 10 november 1967 nr 78 betreffende de uitoefening van de gezondheidszorgberoepen",
 				"creators": [],
-				"dateEnacted": "10 NOVEMBER 1967",
+				"dateEnacted": "10 november 1967",
 				"jurisdiction": "be",
 				"attachments": [],
 				"tags": [],
