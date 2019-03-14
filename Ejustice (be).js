@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-03-14 17:19:14"
+	"lastUpdated": "2019-03-14 17:21:35"
 }
 
 function attr(docOrElem,selector,attr,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.getAttribute(attr):null}function text(docOrElem,selector,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.textContent:null}
@@ -63,7 +63,8 @@ function scrape(doc, url) {
 		rows = doc.querySelectorAll('h3 center u');
 	}
 	else { // cgi_loi
-		rows = doc.querySelectorAll('b')
+		//rows = doc.querySelectorAll('b')
+		rows = frames[0].document.getElementsByTagName('b'); //production
 	}
 	item = getLawEnacted(rows);
 	item.jurisdiction = 'be';
