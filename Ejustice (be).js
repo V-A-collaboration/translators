@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-04-17 11:32:41"
+	"lastUpdated": "2019-04-17 12:00:57"
 }
 
 function attr(docOrElem,selector,attr,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.getAttribute(attr):null}function text(docOrElem,selector,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.textContent:null}
@@ -57,16 +57,20 @@ function getSearchResults(doc, checkOnly) {
 
 function scrape(doc, url) {
 	item = new Zotero.Item(detectWeb(doc, url));
-	const frame = doc.querySelector('frameset');
+	const frame = doc.querySelector('frame');
 	Z.debug(frame);
 	if (frame){
 		Z.debug('Need Frame!');
 		doc = frame;
 	}
 	Z.debug("Document" + JSON.stringify(doc));
-	//const rows = doc.querySelectorAll('tr th b');
-	// production code
-	const rows = frames[0].document.getElementsByTagName('b');
+	
+	let rows = doc.querySelectorAll('tr th b');
+	if (!rows.length) {
+		// production code
+		rows = frames[0].document.getElementsByTagName('b');
+	}
+	
 	Z.debug("Rows length: "+ rows.length + "Rows: " + rows);
 	item = getLawEnacted(rows);
 	item.jurisdiction = 'be';
@@ -78,7 +82,7 @@ function getLawEnacted(lineList){
 	//Z.debug("Linelist length" + lineList.length);
 	for (i=0; i < lineList.length; i++){
 		Z.debug("Line text" + lineList[i].textContent);
-		var m = lineList[i].textContent.match(/(\d{1,2}\s[A-Z]*?\s\d{4})\.\s-\s([^<^;^\.^\(]*)/);
+		var m = lineList[i].innerHTML.match(/(\d{1,2}\s[A-Z]*?\s\d{4})\.\s-\s([^<^;^\.^\(^\&]*)/);
 		if (m){
 			item.dateEnacted = m[1].toLowerCase();
 			Z.debug("Date Enacted: " + item.dateEnacted);
@@ -159,6 +163,23 @@ var testCases = [
 				"nameOfAct": "Koninklijk besluit van 23 december 2008 tot uitvoering van de arbeidsongevallenwet van 10 april 1971 in verband met de onevenredig verzwaarde risico's",
 				"creators": [],
 				"dateEnacted": "23 december 2008",
+				"jurisdiction": "be",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://www.ejustice.just.fgov.be/cgi_loi/loi_a1.pl?language=fr&la=F&cn=1981080431&table_name=loi&&caller=list&F&fromtab=loi&tri=dd+AS+RANK&rech=1&numero=1&sql=(text+contains+(%27%27))",
+		"items": [
+			{
+				"itemType": "statute",
+				"nameOfAct": "Arrêté royal portant règlement de police et de navigation pour la mer territoriale belge, les ports et les plages du littoral belge",
+				"creators": [],
+				"dateEnacted": "4 aout 1981",
 				"jurisdiction": "be",
 				"attachments": [],
 				"tags": [],
