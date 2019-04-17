@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-04-17 12:00:57"
+	"lastUpdated": "2019-04-17 14:02:32"
 }
 
 function attr(docOrElem,selector,attr,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.getAttribute(attr):null}function text(docOrElem,selector,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.textContent:null}
@@ -65,10 +65,10 @@ function scrape(doc, url) {
 	}
 	Z.debug("Document" + JSON.stringify(doc));
 	
-	let rows = doc.querySelectorAll('tr th b');
+	let rows = doc.querySelectorAll('tr th');
 	if (!rows.length) {
 		// production code
-		rows = frames[0].document.getElementsByTagName('b');
+		rows = frames[0].document.getElementsByTagName('th');
 	}
 	
 	Z.debug("Rows length: "+ rows.length + "Rows: " + rows);
@@ -79,24 +79,27 @@ function scrape(doc, url) {
 
 function getLawEnacted(lineList){
 	item = new Zotero.Item('statute');
-	//Z.debug("Linelist length" + lineList.length);
+	// Z.debug("Linelist length" + lineList.length);
 	for (i=0; i < lineList.length; i++){
-		Z.debug("Line text" + lineList[i].textContent);
-		var m = lineList[i].innerHTML.match(/(\d{1,2}\s[A-Z]*?\s\d{4})\.\s-\s([^<^;^\.^\(^\&]*)/);
+		Z.debug("Line text" + lineList[i].innerHTML);
+		var m = lineList[i].innerHTML.match(/(<b>(\d.{3,15}\d{4}).\s-\s(.*)\s<\/b>)/);
 		if (m){
-			item.dateEnacted = m[1].toLowerCase();
+			item.dateEnacted = m[2].toLowerCase();
 			Z.debug("Date Enacted: " + item.dateEnacted);
-			item.nameOfAct = ZU.trimInternal(m[2]);
+			item.nameOfAct = ZU.trimInternal(m[3]);
 			item.nameOfAct = item.nameOfAct.replace(/[\[\]]/g, "");
 			item.nameOfAct = item.nameOfAct.replace(/\.$/, "");
-
+			item.originalDate = lineList[i].innerHTML.match(/Publicat.*?(\d{2}-\d{2}-\d{4})/)[1];
+			Z.debug("Original Date: " + item.originalDate);
+			item.pages = lineList[i].innerHTML.match(/"red">\s?(page|bla).*?(\d+)/)[2];
+			Z.debug("Pages: " + item.pages);
 			if(item.nameOfAct.match(/Wet|Koninklijk besluit/)){
 				item.nameOfAct = item.nameOfAct.replace(/(^(Wet|Koninklijk besluit)*\b)/, "$1 van " + item.dateEnacted.toLowerCase())
 			}
 			Z.debug("Title: " + item.nameOfAct);
-			Z.debug("Item: " + item);
 			break;
 		}
+		//m = lineList[i].innerHTML.match(//);)
 	}
 	return item
 }
@@ -112,6 +115,8 @@ var testCases = [
 				"creators": [],
 				"dateEnacted": "22 augustus 2002",
 				"jurisdiction": "be",
+				"originalDate": "26-09-2002",
+				"pages": "43719",
 				"attachments": [],
 				"tags": [],
 				"notes": [],
@@ -125,10 +130,13 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "statute",
-				"nameOfAct": "Koninklijk besluit van 10 november 1967 nr 78 betreffende de uitoefening van de gezondheidszorgberoepen",
+				"nameOfAct": "Koninklijk besluit van 10 november 1967 nr 78 betreffende de uitoefening van de gezondheidszorgberoepen &lt;W 2001-08-10/49, art. 27; 022; <font color=\"red\"> Inwerkingtreding : </font> 01-09-2001&gt;",
 				"creators": [],
 				"dateEnacted": "10 november 1967",
 				"jurisdiction": "be",
+				"originalDate": "14-11-1967",
+				"pages": "11881",
+				"shortTitle": "Koninklijk besluit van 10 november 1967 nr 78 betreffende de uitoefening van de gezondheidszorgberoepen &lt;W 2001-08-10/49, art. 27; 022; <font color=\"red\"> Inwerkingtreding",
 				"attachments": [],
 				"tags": [],
 				"notes": [],
@@ -142,10 +150,12 @@ var testCases = [
 		"items": [
 			{
 				"itemType": "statute",
-				"nameOfAct": "GERECHTELIJK WETBOEK - Deel IV : BURGERLIJKE RECHTSPLEGING",
+				"nameOfAct": "GERECHTELIJK WETBOEK - Deel IV : BURGERLIJKE RECHTSPLEGING. (art. 664 tot 1385octiesdecies)",
 				"creators": [],
 				"dateEnacted": "10 oktober 1967",
 				"jurisdiction": "be",
+				"originalDate": "31-10-1967",
+				"pages": "11360",
 				"shortTitle": "GERECHTELIJK WETBOEK - Deel IV",
 				"attachments": [],
 				"tags": [],
@@ -164,6 +174,8 @@ var testCases = [
 				"creators": [],
 				"dateEnacted": "23 december 2008",
 				"jurisdiction": "be",
+				"originalDate": "30-12-2008",
+				"pages": "68793",
 				"attachments": [],
 				"tags": [],
 				"notes": [],
@@ -181,6 +193,8 @@ var testCases = [
 				"creators": [],
 				"dateEnacted": "4 aout 1981",
 				"jurisdiction": "be",
+				"originalDate": "01-09-1981",
+				"pages": "10833",
 				"attachments": [],
 				"tags": [],
 				"notes": [],
