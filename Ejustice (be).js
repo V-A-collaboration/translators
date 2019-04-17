@@ -55,8 +55,6 @@ function getSearchResults(doc, checkOnly) {
 	return found ? items : false;
 }
 
-
-
 function scrape(doc, url) {
 	item = new Zotero.Item(detectWeb(doc, url));
 	const frame = doc.querySelector('frameset');
@@ -98,3 +96,76 @@ function getLawEnacted(lineList){
 	}
 	return item
 }
+/** BEGIN TEST CASES **/
+var testCases = [
+	{
+		"type": "web",
+		"url": "http://www.ejustice.just.fgov.be/cgi_loi/loi_a1.pl?language=nl&la=N&cn=2002082245&table_name=wet&&caller=list&N&fromtab=wet&tri=dd+AS+RANK&rech=1&numero=1&sql=(text+contains+(%27%27))",
+		"items": [
+			{
+				"itemType": "statute",
+				"nameOfAct": "Wet van 22 augustus 2002 betreffende de rechten van de patiënt",
+				"creators": [],
+				"dateEnacted": "22 augustus 2002",
+				"jurisdiction": "be",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://www.ejustice.just.fgov.be/cgi_loi/loi_a1.pl?language=nl&la=N&table_name=wet&cn=1967111008&&caller=list&N&fromtab=wet&tri=dd+AS+RANK&rech=1&numero=1&sql=(text+contains+(%27%27))",
+		"items": [
+			{
+				"itemType": "statute",
+				"nameOfAct": "Koninklijk besluit van 10 november 1967 nr 78 betreffende de uitoefening van de gezondheidszorgberoepen",
+				"creators": [],
+				"dateEnacted": "10 november 1967",
+				"jurisdiction": "be",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://www.ejustice.just.fgov.be/cgi_loi/loi_a1.pl?language=nl&la=N&cn=1967101004&table_name=wet&&caller=list&N&fromtab=wet&tri=dd+AS+RANK&rech=1&numero=1&sql=(text+contains+(%27%27))",
+		"items": [
+			{
+				"itemType": "statute",
+				"nameOfAct": "GERECHTELIJK WETBOEK - Deel IV : BURGERLIJKE RECHTSPLEGING",
+				"creators": [],
+				"dateEnacted": "10 oktober 1967",
+				"jurisdiction": "be",
+				"shortTitle": "GERECHTELIJK WETBOEK - Deel IV",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://www.ejustice.just.fgov.be/cgi_loi/loi_a1.pl?language=nl&la=N&cn=2008122334&table_name=wet&&caller=list&N&fromtab=wet&tri=dd+AS+RANK&rech=1&numero=1&sql=(text+contains+(%27%27))",
+		"items": [
+			{
+				"itemType": "statute",
+				"nameOfAct": "Koninklijk besluit van 23 december 2008 tot uitvoering van de arbeidsongevallenwet van 10 april 1971 in verband met de onevenredig verzwaarde risico's",
+				"creators": [],
+				"dateEnacted": "23 december 2008",
+				"jurisdiction": "be",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	}
+]
+/** END TEST CASES **/
