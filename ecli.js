@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 12,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-06-16 13:03:55"
+	"lastUpdated": "2019-06-16 13:37:22"
 }
 
 function attr(docOrElem,selector,attr,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.getAttribute(attr):null}function text(docOrElem,selector,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.textContent:null}
@@ -37,7 +37,7 @@ function doWeb(doc, url) {
 }
 
 function getECLI(co){
-	let m = co.match(/ECLI:(.*?:){3}.*/);
+	const m = co.match(/ECLI:(.*?:){3}.*/);
 	if (m){
 		return m[0];
 	}
@@ -121,7 +121,7 @@ regexFieldsDutch = {
 	"caseDescription": /^Beschrijving/
 }
 regexFieldsCzech = {
-	"provider": /^Poskytovatel ECLI:/,
+	"provider": /^Poskytovatel ECLI/,
 	"jurisdiction": /^Vydávající země nebo instituce/,
 	"court": /^Vydávající soud/,
 	"decisionType": /^Druh rozhodnutí\/rozsudku/,
@@ -132,9 +132,48 @@ regexFieldsCzech = {
 	"abstract": /^Výtah/,
 	"caseDescription": /^Popis/
 }
+//todo check Spanish
+regexFieldsSpanish = {
+	"provider": /^ECLI provider/,
+	"jurisdiction": /^País o institución de emisión/,
+	"court": /^Órgano jurisdiccional emisor/,
+	"decisionType": /^Tipo de decisión o resolución/,
+	"dateDecided": /^Fecha de la decisión o resolución/,
+	"publicationDate": /^Fecha de publicación/,
+	"url": /^Texto de la decisión o resolución/,
+	"fieldOfLaw": /^Ámbito de Derecho/,
+	"abstract": /^Resumen/,
+	"caseDescription": /^Descripción/
+}
+regexFieldsGerman = {
+	"provider": /^ECLI-Datenlieferant/,
+	"jurisdiction": /^ECLI vergebende\(s\) Land\/Einrichtung/,
+	"court": /^ECLI vergebendes Gericht/,
+	"decisionType": /^Art der Entscheidung\/des Urteils/,
+	"dateDecided": /^Datum der Entscheidung\/des Urteils/,
+	"publicationDate": /^Datum der Veröffentlichung\/des Urteils/,
+	"url": /^Wortlaut der Entscheidung\/des Urteils/,
+	"fieldOfLaw": /^Rechtsgebiet/,
+	"abstract": /^Abstrakt/,
+	"caseDescription": /^Beschreibung/
+}
+
+regexFieldsBulgarian = {
+	"provider": /^ECLI доставчик/,
+	"jurisdiction": /^Издаваща държава или институция/,
+	"court": /^Издаващ съд/,
+	"decisionType": /^Вид на съдебното решение\/акт/,
+	"dateDecided": /^Дата на съдебното решение\/акт/,
+	"publicationDate": /Дата на публикуване/,
+	"url": /^Текст на съдебното решение\/акт/,
+	"fieldOfLaw": /^Rechtsgebiet/,
+	"abstract": /^Abstrakt/,
+	"caseDescription": /^Beschreibung/
+}
+
 
 function lookupECLI(ecli, language) {
-	var newUri = "https://e-justice.europa.eu/eclisearch/integrated/search.html?text="+ecli+"&lang="+language.toLowerCase();
+	const newUri = "https://e-justice.europa.eu/eclisearch/integrated/search.html?text="+ecli+"&lang="+language.toLowerCase();
 	Zotero.debug("New URL: " + newUri);
 	Zotero.Utilities.HTTP.processDocuments(newUri, function(doc, url) {
 		//call the import translator
@@ -147,17 +186,26 @@ function getKey(row, language = 'en'){
 	// Get a row and convert it to the correct Zotero Key and value
 	let regexFields;
 	switch(language){
+		case "bg":
+			regexFields = regexFieldsBulgarian;
+			break;
+		case "cs":
+			regexFields = regexFieldsCzech;
+			break;
+		case "de":
+			regexFields = regexFieldsGerman;
+			break;
 		case "en":
 			regexFields = regexFieldsEnglish;
+			break;
+		case "es":
+			regexFields = regexFieldsSpanish;
 			break;
 		case "fr":
 			regexFields = regexFieldsFrench;
 			break;
 		case "nl":
 			regexFields = regexFieldsDutch;
-			break;
-		case "cs":
-			regexFields = regexFieldsCzech;
 			break;
 		default:
 			regexFields = regexFieldsEnglish;
@@ -207,9 +255,9 @@ function getValue(row){
 }
 
 function readResultItem(resultItem, language){
-	let item = new Zotero.Item('case');
-	let rows = resultItem.children;
-	let ecli = rows[0].innerText;
+	const item = new Zotero.Item('case');
+	const rows = resultItem.children;
+	const ecli = rows[0].innerText;
 	item.jurisdiction = rows[0].innerText.match(/ECLI:(.*?):/)[1];
 	for (let i = 2; i < rows.length; i++){
 		// Some items have multiple language
@@ -241,7 +289,8 @@ function readResultItem(resultItem, language){
 	
 	// fix url
 	if (item.url && item.url.includes('http')){
-		item.url = item.url.match(/http:.*?\s/)[0]
+		Z.debug(item.url);
+		item.url = item.url.match(/https?:.*?\s/)[0].trim()
 	}
 	if (item.url && item.url.includes('meta')){
 		delete item.url;
@@ -265,15 +314,15 @@ function readResultItem(resultItem, language){
 }
 
 function getSearchResults(doc, checkOnly) {
-	var items = {};
-	var found = false;
+	const items = {};
+	let found = false;
 	// Adjust the CSS Selectors 
-	var resultList = doc.querySelectorAll('.result-item');
-	for (var i=0; i<resultList.length; i++) {
-		var resultItem = readResultItem(resultList[i]);
-		var href = rows[i].href;
+	const resultList = doc.querySelectorAll('.result-item');
+	for (let i=0; i<resultList.length; i++) {
+		const resultItem = readResultItem(resultList[i]);
+		const href = rows[i].href;
 		// Adjust if required, use Zotero.debug(rows) to check
-		var title = ZU.trimInternal(rows[i].textContent);
+		const title = ZU.trimInternal(rows[i].textContent);
 		if (!href || !title) continue;
 		if (checkOnly) return true;
 		found = true;
@@ -283,14 +332,9 @@ function getSearchResults(doc, checkOnly) {
 }
 
 function scrape(doc, url) {
-	Z.debug(url);
-	let targetECLI = url.match(/=(ECLI.*?)(&|$)/, url)[1];
-	targetECLI = htmlDecode(targetECLI);
+	const targetECLI = htmlDecode(url.match(/=(ECLI.*?)(&|$)/, url)[1]);
 	Z.debug(targetECLI);
 	var resultList = doc.querySelectorAll('.result-item');
-	// select right result by matching ecli..
-	// todo e.g https://e-justice.europa.eu/eclisearch/integrated/search.html?text=ECLI:CZ:NS:2015:32.CDO.2051.2013.1
-	// has values spread over different result-items
 	let resultIter;
 	for(let i = 0; i<resultList.length; i++){
 		if (targetECLI == resultList[i].children[0].innerText){
@@ -298,7 +342,6 @@ function scrape(doc, url) {
 		}
 	}
 	const language = getLanguage(targetECLI, url);
-	// todo merge items to get all relevant fields
 	item = readResultItem(resultList[resultIter], language)
 	item.complete();
 	
@@ -307,7 +350,6 @@ function scrape(doc, url) {
 function getCuriaData(curiaURL){
 	// todo for EU cases get extra data from curia
 }
-
 
 
 function htmlDecode(input)
@@ -410,6 +452,64 @@ var testCases = [
 				"jurisdiction": "CZ",
 				"publicationDate": "13-07-2015",
 				"url": "http://www.aca-europe.eu/index.php/en/jurifast-en?ID=2738",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://e-justice.europa.eu/eclisearch/integrated/search.html?text=ECLI:ES:APZ:2019:1038&lang=es",
+		"items": [
+			{
+				"itemType": "case",
+				"creators": [],
+				"dateDecided": "05-06-2019",
+				"court": "Audiencia Provincial Zaragoza (APZ)",
+				"extra": "ecli: ECLI:ES:APZ:2019:1038",
+				"jurisdiction": "ES",
+				"url": "http://www.poderjudicial.es/search/sentence.jsp?reference=8798258&optimize=20190614",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://e-justice.europa.eu/eclisearch/integrated/search.html?text=ECLI:DE:BGH:2018:201118B1STR560.18.0&lang=de",
+		"items": [
+			{
+				"itemType": "case",
+				"creators": [],
+				"dateDecided": "20-11-2018",
+				"court": "Bundesgerichtshof (BGH)",
+				"extra": "ecli: ECLI:DE:BGH:2018:201118B1STR560.18.0",
+				"jurisdiction": "DE",
+				"url": "https://www.rechtsprechung-im-internet.de/jportal/?quelle=jlink&docid=KORE632902018&psml=bsjrsprod.psml&max=true",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://e-justice.europa.eu/eclisearch/integrated/search.html?text=ECLI:BG:RC223:2018:20180100291.001&lang=bg",
+		"items": [
+			{
+				"itemType": "case",
+				"creators": [],
+				"dateDecided": "10-05-2018",
+				"court": "РАЙОНЕН СЪД",
+				"extra": "ecli: ECLI:BG:RC223:2018:20180100291.001",
+				"jurisdiction": "BG",
+				"publicationDate": "08-01-2019",
+				"url": "https://legalacts.justice.bg/GetActContent/ECLI:BG:RC223:2018:20180100291.001",
 				"attachments": [],
 				"tags": [],
 				"notes": [],
