@@ -1,17 +1,16 @@
 {
 	"translatorID": "6a3e392d-1284-4c81-89b9-4994a2d8a290",
-	"translatorType": 4,
 	"label": "CourtListener",
 	"creator": "Frank Bennett",
-	"target": "https://www.courtlistener.com/(opinion/[0-9]+/|\\?q=.*type=o[^a]).*",
+	"target": "https://www.courtlistener.com/(?:(?:docket|opinion)/[0-9]+/|(?:\\?q=|.*\\&q=)).*",
 	"minVersion": "1.0",
-	"maxVersion": null,
+	"maxVersion": "",
 	"priority": 100,
 	"inRepository": true,
-	"browserSupport": "g",
-	"lastUpdated": "2018-03-24 07:44:14"
+	"translatorType": 4,
+	"browserSupport": "gc",
+	"lastUpdated": "2021-01-04 22:44:44"
 }
-
 
 var codeMap = {
 	"acca": "us:fed;army.court.criminal.appeals", 
@@ -370,6 +369,8 @@ var codeMap = {
 	"tennessed": "us:c6:tn.d;district.court", 
 	"tennesseeb": "us:c6:tn.d;bankruptcy.court", 
 	"tennsuperct": "us:tn;superior.court.law.equity", 
+	"tennworkcompapp": "us:tn;wcab",
+	"tennworkcompcl": "us:tn;cwcc",
 	"tex": "us:tx;supreme.court", 
 	"texag": "us:tx;attorney.general", 
 	"texapp": "us:tx;court.appeals", 
@@ -453,70 +454,140 @@ var citeTypes = [
 
 var procSegments = [
 	"cluster",
-	"opinion",
 	"docket",
-	"court",
 	"audio"
 ]
 
-function fixAttachments(doc, item) {
-	for (var i=0,ilen=item.attachments.length;i<ilen;i++) {
-		var attachment = item.attachments[i];
-
-		if (attachment.snapshot === false) {
-			continue;
-		}
-
-		// head element
-		var head = doc.createElement("head");
-		var body = doc.createElement('div');
-		var css = "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}";
-		
-		var year = false;
-		var itemTitle = item.caseName;
-		if (item.reporterVolume && item.reporter && item.firstPage) {
-			itemTitle = itemTitle + ', ' + item.reporterVolume + ' ' + item.reporter + ' ' + item.firstPage;
-		}
-		if (item.dateDecided) {
-			year = item.dateDecided.replace(/^.*([0-9][0-9][0-9][0-9]).*/, "$1");
-			itemTitle = itemTitle + ' (' + year + ')';
-		}
-		if (attachment._description) {
-			itemTitle = itemTitle + " [" + attachment._description + "]";
-		}
-		delete attachment._description;
-
-		head.innerHTML = '<title>' + itemTitle + '</title>';
-		head.innerHTML += '<style type="text/css">' + css + '</style>'; 
-		
-		body.innerHTML = attachment._txt;
-		delete attachment._txt;
-
-		var newDoc = ZU.composeDoc(doc, head, body);
-		attachment.document = newDoc;
+function fixTitle(str) {
+	var str = ZU.capitalizeTitle(str.toLowerCase(), true);
+	var lst = str.split("\'");
+	for (var i=1,ilen=lst.length;i<ilen;i++) {
+		lst[i] = lst[i].slice(0, 1).toUpperCase() + lst[i].slice(1);
 	}
-	return item;
+	return lst.join("\'");
 }
 
+function padDocketNumber(str, len) {
+	if (len < 0) {
+		str = str.slice(len);
+	} else {
+		str = str.slice(0, len);
+	}
+	len = Math.abs(len);
+	while (str.length < len) {
+		str = `0${str}`;
+	}
+	return str;
+}
+
+function fixCourtCode(str) {
+	str = str.toLowerCase().replace(/^(bk|c|.*(?:bank|misc|cr|c.?v).*)$/, (p, p1) => {
+		if (p1 === "c") {
+			return "cv";
+		} else if (p1 === "bk") {
+			return "bk";
+		} else if (p1.indexOf("cr") > -1) {
+			return "cr";
+		} else if (p1.match(/c.?v/)) {
+			return "cv";
+		} else if (p1.indexOf("misc") > -1) {
+			return "mc";
+		} else if (p1.indexOf("bank") > -1) {
+			return "bk";
+		} else {
+			return p;
+		}
+	});
+	return str;
+}
+
+function normalizeDocketNumber(str) {
+	function _normalizeThree(p, p1, p2, p3) {
+		p1 = padDocketNumber(p1, -2);
+		p2 = fixCourtCode(p2);
+		p3 = padDocketNumber(p3, 5);
+		return `${p1}-${p2}-${p3}`;
+	}
+	function _normalizeTwo(p, p1, p2) {
+		p1 = padDocketNumber(p1, -2);
+		p3 = padDocketNumber(p2, 5);
+		return `${p1}-${p2}`;
+	}
+	str = str.replace(/^[^0-9]*(?:[0-9]:)*([0-9]+)[\s-–~]*([\s.a-zA-Z]+)[\s-–~]*([0-9]+).*$/, _normalizeThree);
+	str = str.replace(/^([0-9]+)[\s-–~]+([0-9]+)$/, _normalizeTwo);
+	return str;
+}
+
+function fixDocketNumber(item) {
+	// Abort if nothing to work with
+	if (!item.docketNumber) return item.docketNumber;
+	// Just strip weird numeric prefix for RECAP docket numbers
+	if (item.url.indexOf("/recap") > -1) {
+		var str = item.docketNumber
+		if (str) {
+			str = item.docketNumber.replace(/^[0-9]:/, "");
+		}
+		return str;
+	} else if (item.court === "bankruptcy.court") {
+		// Bankruptcy cases seem not to have a case type ID
+		// in Pacer ... ?
+		return item.docketNumber;
+	}
+	// Fix docket numbers on federal trial and appellate cases
+	if (item.jurisdiction.match(/^us:c[0-9]/)) {
+		var docnos = item.docketNumber.split(/,\s+/);
+		var label = null;
+		// This obviously won't happen now (see above)
+		if (item.court === "bankruptcy.court") {
+			label = "bk";
+		}
+		for (var i=0,ilen=docnos.length;i<ilen;i++) {
+			// Remove all trailing cruft always
+			docnos[i] = docnos[i].replace(/[^0-9]+$/, "");
+			var docno = docnos[i];
+			// Remove any weird numeric prefix on docket number
+			docnos[i] = docnos[i].replace(/[0-9]:/, "");
+			// If a uniform docket number, normalize it
+			docnos[i] = normalizeDocketNumber(docnos[i]);
+			// Check for leading label and regular numeric pair
+			var m = docno.match(/(^[^0-9]*)([0-9]+)[\s-–~]([0-9]+)$/);
+			// If no leading label or docno is irregular, leave this one unscathed
+			if (!m || (!label && !m[1])) continue;
+			// Check leading label for a hint
+			if (!label) {
+				label = fixCourtCode(m[1]);
+			}
+			docnos[i] = normalizeDocketNumber(`${m[2]}-${label}-${m[3]}`);
+		}
+		return docnos.join(", ");
+	} else {
+		// General cleanup, remove funky labels
+		return item.docketNumber.replace(/^[^0-9]\s[0-9]/, "");
+	}
+}
 
 var proc = {
 	cluster: {
 		setData: function(item, obj) {
 			//Zotero.debug("proc: cluster");
-			
 			var firstCite = true;
+			item.caseName = fixTitle(obj.case_name);
+			item.shortTitle = fixTitle(obj.case_name_short);
 			var extras = [];
-			for (var i=0,ilen=citeTypes.length;i<ilen;i++) {
-				if (obj[citeTypes[i]]) {
-					if (firstCite) {
-						var citeSplit = obj[citeTypes[i]].split(" ");
-						item.reporterVolume = citeSplit[0];
-						item.reporter = citeSplit.slice(1, -1).join(" ");
-						item.firstPage = citeSplit[citeSplit.length-1];
-						firstCite = false;
+			for (var i=0,ilen=obj.citations.length; i<ilen; i++) {
+				var citation = obj.citations[i];
+				if (i === 0) {
+					if (citation.type === 8) {
+						item.yearAsVolume = citation.volume;
+						item.pages = citation.page;
 					} else {
-						extras.push(obj[citeTypes[i]]);
+						item.reporterVolume = citation.volume;
+						item.reporter = citation.reporter;
+						item.pages = citation.page;
 					}
+				} else {
+					var cite = `${citation.volume} ${citation.reporter} ${citation.page}`;
+					extras.push(cite);
 				}
 			}
 			item.dateDecided = obj.date_filed;
@@ -533,45 +604,14 @@ var proc = {
 			urls.docket = [obj.docket + "?fields=docket_number,case_name,case_name_short,court,audio_files"];
 		}
 	},
-	opinion: {
-		setData: function(item, obj) {
-			// Zotero.debug("proc: opinion");
-
-			// Saving of document fragments not currently possible in 5.0
-			//var textForms = ["html_with_citations", "html", "html_columbia", "html_lawbox", "plain_text"];
-			//var mimeTypes = ["text/html", "text/html", "text/html", "text/html", "text/plain"];
-			//for (var i=0,ilen=textForms.length;i<ilen;i++) {
-			//	if (obj[textForms[i]]) {
-			//		item.attachments.push({
-			//			_description: obj.description,
-			//			_txt: obj[textForms[i]],
-			//			mimeType: mimeTypes[i],
-			//			snapshot: true
-			//		});
-			//		break;
-			//	}
-			//}
-		},
-		setURLs: function(item, obj) {
-			// opinion proc sets up no onward call
-		}
-	},
 	docket: {
-		setData: function(item, obj) {
+		setData: function(item, obj, doc) {
 			// Zotero.debug("proc: docket");
 			item.docketNumber = obj.docket_number;
-			item.caseName = obj.case_name;
-			item.title = obj.case_name;
-			item.shortTitle = obj.case_name_short;
-		},
-		setURLs: function(item, obj) {
-			urls.court = [obj.court + "?fields=resource_uri"];
-		}
-	},
-	court: {
-		setData: function(item, obj) {
+			item.filingDate = obj.date_filed;
+			
 			// Zotero.debug("proc: court");
-			var flp_code = obj.resource_uri.replace(/^.*?\/([^\/]*)\/*$/, "$1")
+			var flp_code = obj.court.replace(/^.*?\/([^\/]*)\/*$/, "$1")
 			if (codeMap[flp_code]) {
 				var codeSplit = codeMap[flp_code].split(";")
 				item.jurisdiction = codeSplit[0];
@@ -579,41 +619,87 @@ var proc = {
 			} else {
 				item.jurisdiction = flp_code;
 			}
+			item.docketNumber = fixDocketNumber(item);
+			if (item.jurisdiction === "us:il" && item.court === "appellate.court") {
+				if (item.docketNumber) {
+					var m = item.docketNumber.match(/^([0-9])-/);
+					if (m) {
+						item.jurisdiction = `${item.jurisdiction}:d${m[1]}`;
+					}
+				}
+			}
+			if (item.jurisdiction === "us:oh" && item.court === "court.appeals") {
+				var contentNodes = ZU.xpath(doc, '//div[@id="opinion-content"]');
+				if (contentNodes) {
+					var txt = contentNodes[0].textContent;
+					var divisions = [
+						"first",
+						"second",
+						"third",
+						"fourth",
+						"fifth",
+						"sixth",
+						"seventh",
+						"eighth",
+						"ninth",
+						"tenth",
+						"eleventh",
+						"twelfth"
+					]
+					var rex = new RegExp(`(${divisions.join("|")})`, "i");
+					var m = txt.match(rex);
+					if (m) {
+						var division = divisions.indexOf(m[1].toLowerCase()) + 1;
+						item.jurisdiction = `${item.jurisdiction}:d${division}`;
+					}
+				}
+			}
 		},
 		setURLs: function(item, obj) {
-			var flp_code = obj.resource_uri.replace(/^.*?\/([^\/]*)\/*$/, "$1");
+			var flp_code = obj.court.replace(/^.*?\/([^\/]*)\/*$/, "$1");
 			urls.audio = [];
-			if (item.docketNumber && flp_code) {
-				urls.audio.push('https://www.courtlistener.com/api/rest/v3/search/?type=oa&docket_number=' + item.number + '&court=' + flp_code);
+			// Insert warnings
+			if (item.docketNumber) {
+				var docketNumber = item.docketNumber;
+				if (item.court === "bankruptcy.court") {
+					item.docketNumber = `[CHECK AGAINST CASE REPORT] ${item.docketNumber}`
+				}
+				if (flp_code) {
+					urls.audio.push('https://www.courtlistener.com/api/rest/v3/search/?type=oa&docket_number=' + docketNumber + '&court=' + flp_code);
+				}
 			}
 		}
 	},
 	audio: {
 		setData: function(item, obj) {
 			// Zotero.debug("proc: audio");
-			//for (var i=0,ilen=obj.results.length;i<ilen;i++) {
-			//var theattachment = {
-			//	url: 'https://www.courtlistener.com' + obj.results[i].absolute_url,
-			//	title: 'CourtListener Audio' + (i+1),
-			//	snapshot: false
-			//}
-			//item.attachments.push(theattachment);
-			//}
+			for (var i=0,ilen=obj.results.length;i<ilen;i++) {
+			  var theattachment = {
+				url: 'https://www.courtlistener.com' + obj.results[i].absolute_url,
+				title: 'CourtListener Audio' + (i+1),
+				snapshot: false
+			  }
+			  item.attachments.push(theattachment);
+			}
 		},
-		setURLs: function(item, obj) {
+		setURLs: function(item, obj, callback) {
 			// audio is the terminus
-			urls.end = true;
+			if (callback) {
+				urls.callback = callback;
+			} else {
+				urls.end = true;
+			}
 		}
 	}
 }
 
-function runURLs(step, pos, item, doc) {
+function runURLs(step, pos, item, doc, callback) {
 	var mode = procSegments[step];
 	var url = urls[mode][pos];
-	if (!url || urls.end) {
-		// Saving of document fragments not currently possible in 5.0,
-		// so skip this for now
-		//fixAttachments(doc, item);
+	if (urls.callback) {
+		callback(item, doc);
+		return;
+	} else if (!url || urls.end) {
 		item.complete();
 		return;
 	}
@@ -621,7 +707,7 @@ function runURLs(step, pos, item, doc) {
 		var obj = JSON.parse(txt);
 		proc[mode].setData(item, obj, doc);
 		if (!urls[mode] || urls[mode].length === 0 || pos === (urls[mode].length-1)) {
-			proc[mode].setURLs(item, obj);
+			proc[mode].setURLs(item, obj, callback);
 			step += 1;
 			// We have all the mode URLs we're going to get at this point,
 			// so run through the sets until we find something we can
@@ -637,7 +723,7 @@ function runURLs(step, pos, item, doc) {
 		} else {
 			pos += 1;
 		}
-		runURLs(step, pos, item, doc)
+		runURLs(step, pos, item, doc, callback)
 	}, null, null, {
 		authorization: 'Token ' + ZU.getAppExtra('6a3e392d-1284-4c81-89b9-4994a2d8a290'),
 		accept: 'application/json'
@@ -646,29 +732,31 @@ function runURLs(step, pos, item, doc) {
 
 var urls = {};
 
-function scrapeData(doc, url) {
+function scrapeCase(doc, url) {
 	var num = url.replace(/^.*\/([0-9]+)\/.*/, "$1")
 	var item = new Zotero.Item("case");
 	item.attachments.push({
 		url: url,
-		title: 'CourtListener Snapshot',
-		mimeType: 'text/html'
+		mimeType: 'text/html',
+		snapshot: true,
+		css: "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+		elementID: "opinion-content"
 	});
 	item.url = url.replace(/\?.*/, '');
-	urls.cluster = ['https://www.courtlistener.com/api/rest/v3/clusters/' + num + "/?fields=docket,sub_opinions,date_filed," + citeTypes.join(",")];
+	urls.cluster = ['https://www.courtlistener.com/api/rest/v3/clusters/' + num + "/?fields=docket,sub_opinions,date_filed,citations,case_name,case_name_short"];
 	runURLs(0, 0, item, doc);
 }
 
-function detectWeb(doc, url) {
-	if (url.match(/^https:\/\/www\.courtlistener\.com\/\?q=.*/)) {
-		return "multiple";
-	} else {
-		return "case";
-	}
+function scrapeDocketCase(doc, url) {
+	var num = url.replace(/^.*\/([0-9]+)\/.*/, "$1")
+	var item = new Zotero.Item("case");
+	item.url = url.replace(/\?.*/, '');
+	urls.docket = ['https://www.courtlistener.com/api/rest/v3/dockets/' + num + "/?fields=court,date_filed,docket_number,case_name,case_name_short"];
+	runURLs(1, 0, item, doc);
 }
 
-function getMultiple(doc) {
-	var res = ZU.xpath(doc, '//a[@class="visitable"][contains(@href,"/opinion/")]');
+function getMultiplesList(doc, type) {
+	var res = ZU.xpath(doc, '//article/*/a[@class="visitable"][contains(@href,"/' + type + '/")][1]');
 	if (!res.length) return false;
 	var items = {};
 	for (var i = 0; i < res.length; i++) {
@@ -677,10 +765,112 @@ function getMultiple(doc) {
 	return items;
 }
 
+async function showDocketEntriesList(item, doc) {
+	var items = {};
+	var res = ZU.xpath(doc, '//div[@id="docket-entry-table"]/div[contains(@id, "entry-")]');
+	if (!res.length) return false;
+	var info = {};
+	for (var i=0,ilen=res.length;i<ilen;i++) {
+		var rowNode = res[i];
+		var id = rowNode.getAttribute("id");
+		if (!id.match(/^entry-[0-9]+/)) continue;
+		var documentNumber = id.slice(6);
+		info[documentNumber] = {};
+		info[documentNumber].documentNumber = documentNumber;
+		var date = ZU.xpath(rowNode, './div[2]/p')[0].textContent;
+		info[documentNumber].extra = `Event Date: ${date}`;
+		info[documentNumber].attachments = [];
+		info[documentNumber].url = item.url + "#" + id;
+		// Skip "Main Document" text, which may contain a weird soft-hyphen.
+		var documentName = null;
+		var paras = ZU.xpath(rowNode, './div[position() > 2]//p');
+		for (var j=0,jlen=paras.length;j<jlen;j++) {
+			var pNode = paras[j];
+			var pTxt = pNode.textContent.trim();
+			var pTxtClean = pTxt.replace(/\u00AD/g, "");
+			if (!pTxtClean || pTxtClean === "Main Document") continue;
+			documentName = pTxt;
+			info[documentNumber].documentName = documentName;
+			break;
+		}
+		var anchorRows = ZU.xpath(rowNode, './/div[contains(@class, "recap-documents")]');
+		for (var j=0,jlen=anchorRows.length;j<jlen;j++) {
+			var row = anchorRows[j];
+			var buttonElem = row.children[2];
+			var linkElem = ZU.xpath(buttonElem, './/a')[0];
+			if (linkElem) {
+				var myurl = linkElem.getAttribute("href");
+				var attachment = {
+					mimeType: "application/pdf",
+					url: myurl
+				}
+				// If there is just one attachment, or if the
+				// attachment has first-pos label of "Main Document",
+				// omit title so that the attachment is automatically
+				// named after the case.
+				var labelOne = row.children[0].textContent.trim().replace(/\u00AD/g, "");
+				if (labelOne !== "Main Document" && anchorRows.length > 1) {
+					var label = [];
+					if (labelOne) {
+						label.push(labelOne);
+					}
+					var labelTwo = row.children[1].textContent.trim().replace(/\u00AD/g, "");
+					if (labelTwo) {
+						label.push(labelTwo);
+					}
+					label = label.join(": ");
+					if (label) {
+						attachment.title = label;
+					}
+				}
+				info[documentNumber].attachments.push(attachment);
+			}
+		}
+		items[documentNumber] = `#${documentNumber}: ${date}, ${documentName}`;
+	}
+	Zotero.selectItems(items, function (items) {
+		for (var key in items) {
+			var newItem = new Zotero.Item("case");
+			for (var field in item) {
+				if (field === "complete") continue;
+				newItem[field] = item[field];
+			}
+			for (var field in info[key]) {
+				newItem[field] = info[key][field];
+			}
+			newItem.complete();
+		}
+	});
+}
+
+function doDocketEntries(doc, url) {
+	var num = url.replace(/^.*\/([0-9]+)\/.*/, "$1")
+	var item = new Zotero.Item("case");
+	item.url = url.replace(/\?.*/, '');
+	urls.docket = ['https://www.courtlistener.com/api/rest/v3/dockets/' + num + "/?fields=docket_number,case_name,case_name_short,court,audio_files"];
+	runURLs(1, 0, item, doc, showDocketEntriesList)
+}
+
+function detectWeb(doc, url) {
+	if (url.match(/\/opinion\/[0-9]+/)) {
+		return "case"
+	} else if (url.match(/\/docket\/[0-9]+/)) {
+		return "multiple";
+	} else if (url.match(/[\?\&]q=/)) {
+		return "multiple";
+	} else {
+		return false;
+	}
+}
 
 function doWeb (doc, url) {
-	if ("multiple" == detectWeb(doc, url)) {
-		var items = getMultiple(doc);
+	url = url.replace(/\#.*$/, "");
+	if (url.match(/\/opinion\/[0-9]+/)) {
+		// Zotero.debug("Fetch case");
+		scrapeCase(doc, url)
+	} else if (url.match(/[\?\&]type=r/)) {
+		// Zotero.debug("Fetch multiple docket cases");
+		var items = getMultiplesList(doc, "docket");
 		Zotero.selectItems(items, function (items) {
 			if (!items) {
 				return true;
@@ -689,9 +879,363 @@ function doWeb (doc, url) {
 			for (var i in items) {
 				caseURLs.push(i);
 			}
-			ZU.processDocuments(caseURLs, scrapeData);
+			ZU.processDocuments(caseURLs, scrapeDocketCase);
 		});
+	} else if (url.match(/[\?\&]q=/)) {
+		// Zotero.debug("Fetch multiple opinions");
+		var items = getMultiplesList(doc, "opinion");
+		Zotero.selectItems(items, function (items) {
+			if (!items) {
+				return true;
+			}
+			var caseURLs = [];
+			for (var i in items) {
+				caseURLs.push(i);
+			}
+			ZU.processDocuments(caseURLs, scrapeCase);
+		});
+	} else if (url.match(/\/docket\//)) {
+		// Zotero.debug("Fetch multiple docket entries");
+		doDocketEntries(doc, url);
 	} else {
-		scrapeData(doc, url)
+		Zotero.debug("Nothing at all");
 	}
 }
+/** BEGIN TEST CASES **/
+var testCases = [
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/2456202/valore-v-islamic-republic-of-iran/?q=&type=o&order_by=score%20desc&stat_Precedential=on&filed_after=01%2F01%2F2006&court=dcd%20almd%20alnd%20alsd%20akd%20azd%20ared%20arwd%20cacd%20caed%20cand%20casd%20cod%20ctd%20ded%20flmd%20flnd%20flsd%20gamd%20gand%20gasd%20hid%20idd%20ilcd%20ilnd%20ilsd%20innd%20insd%20iand%20iasd%20ksd%20kyed%20kywd%20laed%20lamd%20lawd%20med%20mdd%20mad%20mied%20miwd%20mnd%20msnd%20mssd%20moed%20mowd%20mtd%20ned%20nvd%20nhd%20njd%20nmd%20nyed%20nynd%20nysd%20nywd%20nced%20ncmd%20ncwd%20ndd%20ohnd%20ohsd%20oked%20oknd%20okwd%20ord%20paed%20pamd%20pawd%20rid%20scd%20sdd%20tned%20tnmd%20tnwd%20txed%20txnd%20txsd%20txwd%20utd%20vtd%20vaed%20vawd%20waed%20wawd%20wvnd%20wvsd%20wied%20wiwd%20wyd%20gud%20nmid%20prd%20vid%20californiad%20caca%20circtdel%20illinoised%20illinoisd%20indianad%20orld%20circtnc%20ohiod%20pennsylvaniad%20southcarolinaed%20southcarolinawd%20tennessed%20circttenn%20canalzoned",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "Valore v. Islamic Republic of Iran",
+				"creators": [],
+				"dateDecided": "2010-03-31",
+				"court": "district.court",
+				"docketNumber": "03-cv-01959, 06-cv-00516, 06-cv-00750, 08-cv-01273",
+				"firstPage": "52",
+				"jurisdiction": "us:c0:dc.d",
+				"reporter": "F. Supp. 2d",
+				"reporterVolume": 700,
+				"shortTitle": "Valore",
+				"url": "https://www.courtlistener.com/opinion/2456202/valore-v-islamic-republic-of-iran/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/2360732/in-re-search-of-certain-cell-phones/?q=&type=o&order_by=score%20desc&case_name=cell%20phone&stat_Precedential=on&filed_after=01%2F01%2F2006&court=dcd",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "In Re Search of Certain Cell Phones",
+				"creators": [],
+				"dateDecided": "2008-03-04",
+				"court": "district.court",
+				"docketNumber": "08-cr-00174, 08-cr-00175, 08-cr-00176, 08-cr-00177",
+				"firstPage": "1",
+				"jurisdiction": "us:c0:dc.d",
+				"reporter": "F. Supp. 2d",
+				"reporterVolume": 541,
+				"url": "https://www.courtlistener.com/opinion/2360732/in-re-search-of-certain-cell-phones/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/4456832/antoon-v-securus-technologies-inc/?q=flynn&type=o&order_by=score%20desc&stat_Precedential=on&stat_Non-Precedential=on&stat_Errata=on&stat_Separate%20Opinion=on&stat_In-chambers=on&stat_Relating-to%20orders=on&stat_Unknown%20Status=on&filed_after=08%2F31%2F2017&filed_before=03%2F08%2F2018&court=dcd",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "Antoon v. Securus Technologies, Inc.",
+				"creators": [],
+				"dateDecided": "2018-01-03",
+				"court": "district.court",
+				"docketNumber": "17-mc-01892",
+				"jurisdiction": "us:c0:dc.d",
+				"shortTitle": "Antoon",
+				"url": "https://www.courtlistener.com/opinion/4456832/antoon-v-securus-technologies-inc/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/2375881/flynn-v-doyle/?q=flynn&type=o&order_by=score%20desc&stat_Precedential=on&stat_Non-Precedential=on&stat_Errata=on&stat_Separate%20Opinion=on&stat_In-chambers=on&stat_Relating-to%20orders=on&stat_Unknown%20Status=on&filed_after=01%2F01%2F2006&court=wied",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "Flynn v. Doyle",
+				"creators": [],
+				"dateDecided": "2009-04-24",
+				"court": "district.court",
+				"docketNumber": "06-cv-00537",
+				"firstPage": "987",
+				"jurisdiction": "us:c7:wi.ed",
+				"reporter": "F. Supp. 2d",
+				"reporterVolume": 630,
+				"shortTitle": "Flynn",
+				"url": "https://www.courtlistener.com/opinion/2375881/flynn-v-doyle/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/2115303/southeastern-metals-v-florida-metal-products/",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "Southeastern Metals v. Florida Metal Products",
+				"creators": [],
+				"dateDecided": "2011-04-21",
+				"court": "district.court",
+				"docketNumber": "09-cv-01250",
+				"firstPage": "1341",
+				"jurisdiction": "us:c11:fl.md",
+				"reporter": "F. Supp. 2d",
+				"reporterVolume": 778,
+				"url": "https://www.courtlistener.com/opinion/2115303/southeastern-metals-v-florida-metal-products/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/2573394/nco-financial-systems-inc-v-yari/",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "Nco Financial Systems, Inc. v. Yari",
+				"creators": [],
+				"dateDecided": "2006-03-30",
+				"court": "district.court",
+				"docketNumber": "06-cv-00286",
+				"firstPage": "1237",
+				"jurisdiction": "us:c10:co.d",
+				"reporter": "F. Supp. 2d",
+				"reporterVolume": 422,
+				"shortTitle": "Yari",
+				"url": "https://www.courtlistener.com/opinion/2573394/nco-financial-systems-inc-v-yari/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/1522154/in-re-rodgers/?type=o&q=rodgers&type=o&order_by=score%20desc&stat_Precedential=on&court=bapme%20bapma%20almb%20alnb%20alsb%20akb%20arb%20areb%20arwb%20cacb%20caeb%20canb%20casb%20cob%20ctb%20deb%20dcb%20flmb%20flnb%20flsb%20gamb%20ganb%20gasb%20hib%20idb%20ilcb%20ilnb%20ilsb%20innb%20insb%20ianb%20iasb%20ksb%20kyeb%20kywb%20laeb%20lamb%20lawb%20meb%20mdb%20mab%20mieb%20miwb%20mnb%20msnb%20mssb%20moeb%20mowb%20mtb%20nebraskab%20nvb%20nhb%20njb%20nmb%20nyeb%20nynb%20nysb%20nywb%20nceb%20ncmb%20ncwb%20ndb%20ohnb%20ohsb%20okeb%20oknb%20okwb%20orb%20paeb%20pamb%20pawb%20rib%20scb%20sdb%20tneb%20tnmb%20tnwb%20tennesseeb%20txeb%20txnb%20txsb%20txwb%20utb%20vtb%20vaeb%20vawb%20waeb%20wawb%20wvnb%20wvsb%20wieb%20wiwb%20wyb%20gub%20nmib%20prb%20vib",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "In Re Rodgers",
+				"creators": [],
+				"dateDecided": "2010-05-19",
+				"court": "bankruptcy.court",
+				"docketNumber": "[CHECK AGAINST CASE REPORT] 9:09-bk-13886-ALP",
+				"firstPage": "910",
+				"jurisdiction": "us:c11:fl.md",
+				"reporter": "B.R.",
+				"reporterVolume": 430,
+				"url": "https://www.courtlistener.com/opinion/1522154/in-re-rodgers/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/1816815/in-re-singletary/?q=rodgers&type=o&order_by=score%20desc&stat_Precedential=on&filed_after=01%2F01%2F2006&court=bapme%20bapma%20almb%20alnb%20alsb%20akb%20arb%20areb%20arwb%20cacb%20caeb%20canb%20casb%20cob%20ctb%20deb%20dcb%20flmb%20flnb%20flsb%20gamb%20ganb%20gasb%20hib%20idb%20ilcb%20ilnb%20ilsb%20innb%20insb%20ianb%20iasb%20ksb%20kyeb%20kywb%20laeb%20lamb%20lawb%20meb%20mdb%20mab%20mieb%20miwb%20mnb%20msnb%20mssb%20moeb%20mowb%20mtb%20nebraskab%20nvb%20nhb%20njb%20nmb%20nyeb%20nynb%20nysb%20nywb%20nceb%20ncmb%20ncwb%20ndb%20ohnb%20ohsb%20okeb%20oknb%20okwb%20orb%20paeb%20pamb%20pawb%20rib%20scb%20sdb%20tneb%20tnmb%20tnwb%20tennesseeb%20txeb%20txnb%20txsb%20txwb%20utb%20vtb%20vaeb%20vawb%20waeb%20wawb%20wvnb%20wvsb%20wieb%20wiwb%20wyb%20gub%20nmib%20prb%20vib",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "In Re Singletary",
+				"creators": [],
+				"dateDecided": "2006-10-19",
+				"court": "bankruptcy.court",
+				"docketNumber": "[CHECK AGAINST CASE REPORT] 17-30699",
+				"firstPage": "455",
+				"jurisdiction": "us:c5:tx.sd",
+				"reporter": "B.R.",
+				"reporterVolume": 354,
+				"url": "https://www.courtlistener.com/opinion/1816815/in-re-singletary/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/1991450/in-re-blanton-smith-corp/?type=o&q=smith&type=o&order_by=score%20desc&stat_Precedential=on&court=almb%20alnb%20alsb%20akb%20arb%20areb%20arwb%20cacb%20caeb%20canb%20casb%20cob%20ctb%20deb%20dcb%20flmb%20flnb%20flsb%20gamb%20ganb%20gasb%20hib%20idb%20ilcb%20ilnb%20ilsb%20innb%20insb%20ianb%20iasb%20ksb%20kyeb%20kywb%20laeb%20lamb%20lawb%20meb%20mdb%20mab%20mieb%20miwb%20mnb%20msnb%20mssb%20moeb%20mowb%20mtb%20nebraskab%20nvb%20nhb%20njb%20nmb%20nyeb%20nynb%20nysb%20nywb%20nceb%20ncmb%20ncwb%20ndb%20ohnb%20ohsb%20okeb%20oknb%20okwb%20orb%20paeb%20pamb%20pawb%20rib%20scb%20sdb%20tneb%20tnmb%20tnwb%20tennesseeb%20txeb%20txnb%20txsb%20txwb%20utb%20vtb%20vaeb%20vawb%20waeb%20wawb%20wvnb%20wvsb%20wieb%20wiwb%20wyb%20gub%20nmib%20prb%20vib",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "[CHECK AGAINST PAGE VIEW] In Re Blanton Smith Corp.",
+				"creators": [],
+				"dateDecided": "1980-11-26",
+				"court": "bankruptcy.court",
+				"docketNumber": "[CHECK AGAINST CASE REPORT] Bkrtcy. Nos. 380-01019, 380-01020",
+				"firstPage": "410",
+				"jurisdiction": "us:c6:tn.md",
+				"reporter": "B.R.",
+				"reporterVolume": 7,
+				"shortTitle": "In Re Blanton Smith Corp.",
+				"url": "https://www.courtlistener.com/opinion/1991450/in-re-blanton-smith-corp/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/2088592/people-v-fuzz/?type=o&q=fuzz&type=o&order_by=score%20desc&stat_Precedential=on&court=illappct",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "People v. Fuzz",
+				"creators": [],
+				"dateDecided": "1991-08-28",
+				"court": "appellate.court",
+				"docketNumber": "3-90-0896",
+				"extra": "Other cites: 218 Ill. App. 3d 418; 578 N.E.2d 294",
+				"firstPage": "167",
+				"jurisdiction": "us:il:d3",
+				"reporter": "Ill. Dec.",
+				"reporterVolume": 161,
+				"shortTitle": "Fuzz",
+				"url": "https://www.courtlistener.com/opinion/2088592/people-v-fuzz/",
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "https://www.courtlistener.com/opinion/2698937/state-v-cline/?q=bucket&type=o&order_by=score%20desc&stat_Precedential=on&filed_after=01%2F01%2F2012&court=ohioctapp",
+		"items": [
+			{
+				"itemType": "case",
+				"caseName": "State v. Cline",
+				"creators": [],
+				"dateDecided": "2013-04-08",
+				"court": "court.appeals",
+				"docketNumber": "12 CA 11",
+				"firstPage": "1404",
+				"jurisdiction": "us:oh:d5",
+				"shortTitle": "Cline",
+				"url": "https://www.courtlistener.com/opinion/2698937/state-v-cline/",
+				"yearAsVolume": 2013,
+				"attachments": [
+					{
+						"mimeType": "text/html",
+						"snapshot": true,
+						"css": "*{margin:0;padding:0;}div.mlz-outer{width: 60em;margin:0 auto;text-align:left;}body{text-align:center;}p{margin-top:0.75em;margin-bottom:0.75em;}div.mlz-link-button a{text-decoration:none;background:#cccccc;color:white;border-radius:1em;font-family:sans;padding:0.2em 0.8em 0.2em 0.8em;}div.mlz-link-button a:hover{background:#bbbbbb;}div.mlz-link-button{margin: 0.7em 0 0.8em 0;}pre.inline{white-space:pre;display:inline;}span.citation{white-space:pre;}",
+						"elementID": "opinion-content"
+					}
+				],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	}
+]
+/** END TEST CASES **/

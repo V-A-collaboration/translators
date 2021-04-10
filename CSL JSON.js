@@ -12,7 +12,28 @@
 	"inRepository": true,
 	"translatorType": 3,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-01-31 00:12:00"
+	"lastUpdated": "2020-01-31 00:12:00"
+}
+
+var mimeTypes = {
+    "PDF": "application/pdf",
+    "DOC": "application/msword",
+    "DOCX": "application/msword",
+    "HTML": "text/html",
+    "HTM": "text/html",
+    "TXT": "text/plain",
+    "DEFAULT": "application/octet-stream"
+};
+
+var mimeRex = new RegExp("(" + Object.keys(mimeTypes).join("|") + ")$", "i");
+
+function getMimeType(str) {
+    var mimeKey = "DEFAULT";
+    var m = mimeRex.exec(str);
+    if (m) {
+        mimeKey = m[1].toUpperCase();
+    }
+    return mimeTypes[mimeKey];
 }
 
 function parseInput() {
@@ -31,15 +52,17 @@ function parseInput() {
 }
 
 function detectImport() {
+
 	const CSL_TYPES = {"article":true, "article-journal":true, "article-magazine":true,
 		"article-newspaper":true, "bill":true, "book":true, "broadcast":true,
 		"chapter":true, "dataset":true, "entry":true, "entry-dictionary":true,
 		"entry-encyclopedia":true, "figure":true, "graphic":true, "interview":true,
-		"legal_case":true, "legislation":true, "manuscript":true, "map":true,
+		"legal_case":true, "legal_commentary": true, "legislation":true, "manuscript":true, "map":true,
 		"motion_picture":true, "musical_score":true, "pamphlet":true,
 		"paper-conference":true, "patent":true, "personal_communication":true,
 		"post":true, "post-weblog":true, "report":true, "review":true, "review-book":true,
-		"song":true, "speech":true, "thesis":true, "treaty":true, "webpage":true};
+		"song":true, "speech":true, "thesis":true, "treaty":true, "webpage":true,
+		"gazette":true, "regulation":true, "classic":true, "standard":true, "hearing":true, "video":true};
 		
 	var parsedData = parseInput();
 	if (!parsedData) return false;
@@ -49,7 +72,8 @@ function detectImport() {
 	
 	for (var i=0; i<parsedData.length; i++) {
 		var item = parsedData[i];
-		if (typeof item !== "object" || !item.type || !(item.type in CSL_TYPES)) {
+		// second argument is for "strict"
+		if (typeof item !== "object" || !item.type || !CSL_TYPES[item.type]) {
 			return false;
 		}
 	}
@@ -88,8 +112,54 @@ function importNext(data, resolve, reject) {
 	try {
 		var d;
 		while (d = data.shift()) {
+			// Handle legacy CSL JSON exports
+			if (d.journalAbbreviation) {
+				d["container-title-short"] = d.journalAbbreviation;
+				delete d.journalAbbreviation;
+			}
 			var item = new Z.Item();
 			ZU.itemFromCSLJSON(item, d);
+			item.attachments = [];
+            item.tags = [];
+			if (d.attachments && d.attachments.length) {
+				for (var att of d.attachments) {
+                    var title = null, path = null, note = null, tags = [];
+                    if (typeof att === "string") {
+                        title = att.replace(/^.*\//, "");
+                        path = att;
+                    } else if (att.path) {
+						if (att.title) {
+							title = att.title;
+						} else {
+							title = att.path.replace(/^.*\//, "");
+						}
+						if (att.note) {
+							note = att.note;
+						}
+                        path = att.path;
+						
+                    }
+					if (att.tags) {
+						tags = att.tags;
+					}
+                    if (title && path) {
+					    item.attachments.push({
+						    title: title,
+						    path: path,
+						    tags: tags,
+							note: note,
+						    mimeType: getMimeType(path)
+					    });
+                    }
+				}
+			}
+            if (d.tags) {
+                var tags = d.tags;
+                if (typeof d.tags === "string") {
+                    tags = d.tags.split(/\s*,\s*/);
+                }
+                item.tags = tags;
+            }
 			var maybePromise = item.complete();
 			if (maybePromise) {
 				maybePromise.then(function () {
