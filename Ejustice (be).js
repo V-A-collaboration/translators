@@ -89,7 +89,6 @@ function getLawEnacted(lineList){
 			item.nameOfAct = ZU.trimInternal(m[3]);
 			item.nameOfAct = item.nameOfAct.replace(/[\[\]]/g, "");
 			item.nameOfAct = item.nameOfAct.replace(/\.$/, "");
-			item.originalDate = lineList[i].innerHTML.match(/Publicat.*?(\d{2}-\d{2}-\d{4})/)[1];
 			item.publicationDate = lineList[i].innerHTML.match(/Publicat.*?(\d{2}-\d{2}-\d{4})/)[1];
 			Z.debug("Publication Date: " + item.publicationDate);
 			item.pages = lineList[i].innerHTML.match(/"red">\s?(page|bla).*?(\d+)/)[2];
