@@ -9,101 +9,102 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-04-18 07:10:20"
+	"lastUpdated": "2021-05-23 08:51:20"
 }
 
-function attr(docOrElem,selector,attr,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.getAttribute(attr):null}function text(docOrElem,selector,index){var elem=index?docOrElem.querySelectorAll(selector).item(index):docOrElem.querySelector(selector);return elem?elem.textContent:null}
+/*
+	***** BEGIN LICENSE BLOCK *****
+	*
+	Copyright © 2021 Mathijs Van Westendorp
+
+	This file is part of Zotero.
+	Zotero is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Affero General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	Zotero is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+	GNU Affero General Public License for more details.
+	You should have received a copy of the GNU Affero General Public License
+	along with Zotero. If not, see <http://www.gnu.org/licenses/>.
+	***** END LICENSE BLOCK *****
+*/
 
 function detectWeb(doc, url) {
 	// Adjust the inspection of url as required
-	if ( url.indexOf('wet') != -1 || url.indexOf('loi') != -1 ) {
+	if (url.includes('wet') || url.includes('loi')) {
 		return 'statute';
 	}
 	// Adjust the inspection of url as required
-	else if (url.indexOf('book') != -1){
+	else if (url.includes('book')) {
 		return 'book';
 	}
-	else if (url.indexOf('journal') != -1){
+	else if (url.includes('journal')) {
 		return 'journalArticle';
 	}
 	// Add other cases if needed
+	return '';
 }
 
 function doWeb(doc, url) {
 	if (detectWeb(doc, url) == "multiple") {
 		Z.debug("Shouldn't happen");
-	} else {
+	}
+	else {
 		scrape(doc, url);
 	}
 }
 
-function getSearchResults(doc, checkOnly) {
-	var items = {};
-	var found = false;
-	// Adjust the CSS Selectors
-	var rows = doc.querySelectorAll('.detailsLink');
-	for (var i=0; i<rows.length; i++) {
-		// Adjust if required, use Zotero.debug(rows) to check
-		var href = rows[i].href;
-		// Adjust if required, use Zotero.debug(rows) to check
-		var title = ZU.trimInternal(rows[i].textContent);
-		if (!href || !title) continue;
-		if (checkOnly) return true;
-		found = true;
-		items[href] = title;
-	}
-	return found ? items : false;
-}
-
 function scrape(doc, url) {
-	item = new Zotero.Item(detectWeb(doc, url));
+	let item = new Zotero.Item(detectWeb(doc, url));
 	const frame = doc.querySelector('frame');
 	Z.debug(frame);
-	if (frame){
+	if (frame) {
 		Z.debug('Need Frame!');
 		doc = frame;
 	}
 	Z.debug("Document" + JSON.stringify(doc));
-	
+
 	let rows = doc.querySelectorAll('tr th');
 	if (!rows.length) {
 		// production code
-		rows = frames[0].document.getElementsByTagName('th');
+		rows = frame[0].document.getElementsByTagName('th');
 	}
-	
-	Z.debug("Rows length: "+ rows.length + "Rows: " + rows);
+
+	Z.debug("Rows length: " + rows.length + "Rows: " + rows);
 	item = getLawEnacted(rows);
 	item.jurisdiction = 'be';
 	item.complete();
 }
 
-function getLawEnacted(lineList){
-	item = new Zotero.Item('statute');
-	// Z.debug("Linelist length" + lineList.length);
-	for (i=0; i < lineList.length; i++){
+function getLawEnacted(lineList) {
+	let item = new Zotero.Item('statute');
+
+	for (let i = 0; i < lineList.length; i++) {
 		Z.debug("Line text" + lineList[i].innerHTML);
 		var m = lineList[i].innerHTML.match(/(<b>(\d{1,2}.{3,15}\d{4}).\s-\s(.*?)<.)/);
-		if (m){
+		if (m) {
 			item.dateEnacted = m[2].toLowerCase();
 			Z.debug("Date Enacted: " + item.dateEnacted);
 			item.nameOfAct = ZU.trimInternal(m[3]);
-			item.nameOfAct = item.nameOfAct.replace(/[\[\]]/g, "");
+			item.nameOfAct = item.nameOfAct.replace(/[[\]]/g, "");
 			item.nameOfAct = item.nameOfAct.replace(/\.$/, "");
 			item.publicationDate = lineList[i].innerHTML.match(/Publicat.*?(\d{2}-\d{2}-\d{4})/)[1];
 			Z.debug("Publication Date: " + item.publicationDate);
 			item.pages = lineList[i].innerHTML.match(/"red">\s?(page|bla).*?(\d+)/)[2];
 			Z.debug("Pages: " + item.pages);
-			if(item.nameOfAct.match(/(^.?(Wet|.*?\sbesluit|Ministerieel\sbesluit|Decreet)*\b)/)){
-				item.nameOfAct = item.nameOfAct.replace(/(^.?(Wet|.*?\sbesluit|Ministerieel\sbesluit|Decreet)*\b)/, "$1 van " + item.dateEnacted.toLowerCase())
+			if (item.nameOfAct.match(/(^.?(Wet|.*?\sbesluit|Ministerieel\sbesluit|Decreet)*\b)/)) {
+				item.nameOfAct = item.nameOfAct.replace(/(^.?(Wet|.*?\sbesluit|Ministerieel\sbesluit|Decreet)*\b)/, "$1 van " + item.dateEnacted.toLowerCase());
 			}
 			Z.debug("Title: " + item.nameOfAct);
 			item.code = "BS";
 			break;
 		}
-		//m = lineList[i].innerHTML.match(//);)
 	}
-	return item
+	return item;
 }
+
 /** BEGIN TEST CASES **/
 var testCases = [
 	{
