@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2021-05-23 08:51:20"
+	"lastUpdated": "2021-05-28 14:36:20"
 }
 
 /*
@@ -94,8 +94,8 @@ function getLawEnacted(lineList) {
 			Z.debug("Publication Date: " + item.publicationDate);
 			item.pages = lineList[i].innerHTML.match(/"red">\s?(page|bla).*?(\d+)/)[2];
 			Z.debug("Pages: " + item.pages);
-			if (item.nameOfAct.match(/(^.?(Wet|.*?\sbesluit|Ministerieel\sbesluit|Decreet)*\b)/)) {
-				item.nameOfAct = item.nameOfAct.replace(/(^.?(Wet|.*?\sbesluit|Ministerieel\sbesluit|Decreet)*\b)/, "$1 van " + item.dateEnacted.toLowerCase());
+			if (item.nameOfAct.match(/(^.?(Wet|.*?\sbesluit|Ministerieel\sbesluit|Decreet)\b)/)) {
+				item.nameOfAct = item.nameOfAct.replace(/(^.?(Wet|.*?\sbesluit|Ministerieel\sbesluit|Decreet)\b)/, "$1 van " + item.dateEnacted.toLowerCase());
 			}
 			Z.debug("Title: " + item.nameOfAct);
 			item.code = "BS";
