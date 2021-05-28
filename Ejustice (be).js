@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsibv",
-	"lastUpdated": "2019-04-18 07:10:20"
+	"lastUpdated": "2021-05-23 08:51:20"
 }
 
 /*
@@ -65,13 +65,13 @@ function scrape(doc, url) {
 		doc = frame;
 	}
 	Z.debug("Document" + JSON.stringify(doc));
-	
+
 	let rows = doc.querySelectorAll('tr th');
 	if (!rows.length) {
 		// production code
 		rows = frame[0].document.getElementsByTagName('th');
 	}
-	
+
 	Z.debug("Rows length: " + rows.length + "Rows: " + rows);
 	item = getLawEnacted(rows);
 	item.jurisdiction = 'be';
@@ -80,7 +80,7 @@ function scrape(doc, url) {
 
 function getLawEnacted(lineList) {
 	let item = new Zotero.Item('statute');
-	
+
 	for (let i = 0; i < lineList.length; i++) {
 		Z.debug("Line text" + lineList[i].innerHTML);
 		var m = lineList[i].innerHTML.match(/(<b>(\d{1,2}.{3,15}\d{4}).\s-\s(.*?)<.)/);
